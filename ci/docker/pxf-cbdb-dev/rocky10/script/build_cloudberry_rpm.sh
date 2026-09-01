@@ -96,8 +96,16 @@ echo "Apache Cloudberry Database installed successfully"
 rm -rf %{buildroot}
 EOF
 
-# Build RPM package
-rpmbuild --define "_topdir ${RPM_BUILD_DIR}" -bb "${RPM_BUILD_DIR}/SPECS/cloudberry-db.spec"
+# Build RPM package.
+#
+# RHEL/Rocky 10 added check-rpaths to the default %install post-processing chain
+# (RHEL 9 never runs it), and it aborts the build over RUNPATHs that Cloudberry
+# sets on purpose: ${INSTALL_PREFIX}/lib on its own libraries, /usr/lib64 on the
+# plpython3 modules and /ext/python/lib on plpython3.so. This RPM exists only to
+# install Cloudberry into a CI container and is never published, so turn the
+# rpath QA off entirely and keep this lane behaving like the Rocky 9 one.
+QA_RPATHS=$(( 0x0001|0x0002|0x0004|0x0008|0x0010|0x0020 )) \
+  rpmbuild --define "_topdir ${RPM_BUILD_DIR}" -bb "${RPM_BUILD_DIR}/SPECS/cloudberry-db.spec"
 
 RPM_FILE=$(find "${RPM_BUILD_DIR}/RPMS" -name "*.rpm" | head -1)
 echo "=== RPM Package Created ==="
