@@ -64,8 +64,20 @@ setup_locale_and_packages() {
     sudo locale-gen en_US.UTF-8 ru_RU.CP1251 ru_RU.UTF-8
     sudo update-locale LANG=en_US.UTF-8
   else
+    # RHEL/Rocky 10 dropped OpenJDK 8 and 11 from its repos (only 21/25 remain).
+    # The image already ships both from Adoptium under the /usr/lib/jvm names
+    # detect_java_paths() expects, so only ask dnf for them on 9 and older.
+    local rpm_jdk_pkgs="java-11-openjdk-headless java-1.8.0-openjdk-headless"
+    if [ -r /etc/os-release ]; then
+      local os_major
+      os_major=$(. /etc/os-release && echo "${VERSION_ID%%.*}")
+      if [ -n "$os_major" ] && [ "$os_major" -ge 10 ] 2>/dev/null; then
+        rpm_jdk_pkgs=""
+      fi
+    fi
+    # shellcheck disable=SC2086 # word splitting is intended for the package list
     retry sudo dnf install -y --nobest wget maven unzip openssh-server iproute sudo \
-      java-11-openjdk-headless java-1.8.0-openjdk-headless \
+      $rpm_jdk_pkgs \
       glibc-langpack-en glibc-locale-source
     sudo localedef -c -i en_US -f UTF-8 en_US.UTF-8 || true
     sudo localedef -c -i ru_RU -f UTF-8 ru_RU.UTF-8 || true
