@@ -86,7 +86,11 @@ setup_ssh() {
     key_algs=ssh-rsa,ssh-dss
   fi
   log "sshd key types: ${key_algs}"
-  sudo bash -c "cat >/etc/ssh/sshd_config.d/pxf-automation.conf <<EOF
+  # Must sort before 40-redhat-crypto-policies.conf: sshd keeps the FIRST value
+  # it obtains for a keyword, so a drop-in read after the crypto-policy include
+  # is silently ignored. That is why Rocky 10 never actually offered ssh-rsa.
+  sudo rm -f /etc/ssh/sshd_config.d/pxf-automation.conf
+  sudo bash -c "cat >/etc/ssh/sshd_config.d/01-pxf-automation.conf <<EOF
 KexAlgorithms +diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
 HostKeyAlgorithms +${key_algs}
 PubkeyAcceptedAlgorithms +${key_algs}
