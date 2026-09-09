@@ -69,11 +69,34 @@ To build PXF, you must have:
     source /usr/local/cloudberry-db/cloudberry-env.sh # For Cloudberry 2.1+
     ```
 
-3. JDK 1.8 or JDK 11 to compile/run
+3. JDK 1.8, 11, 17, or 21 to compile/run
 
-    Export your `JAVA_HOME`:
+    > [!NOTE]
+    > Support for JDK 1.8 will be removed in PXF 3.0. Use JDK 11 or later for new setups.
+
+    A full JDK is required -- a JRE is not enough, because the server module needs
+    `javac`. If only a JRE is installed, Gradle fails with
+    `Toolchain installation '...' does not provide the required capabilities: [JAVA_COMPILER]`.
+    Note that on Debian/Ubuntu the `maven` package depends on `default-jre-headless` and does
+    **not** pull in a JDK.
+
+    > [!IMPORTANT]
+    > If you hit that error and then install the JDK, you must also stop the Gradle
+    > daemon (`cd server && ./gradlew --stop`) before rebuilding. The daemon caches JVM
+    > installation metadata for its whole lifetime, so a daemon started while only the
+    > JRE was present keeps reporting the identical error even after `javac` exists.
+
     ```
-    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+    # Debian/Ubuntu
+    sudo apt-get install -y openjdk-11-jdk
+    # RHEL/Rocky
+    sudo dnf install -y java-11-openjdk-devel
+    ```
+
+    Export your `JAVA_HOME`, pointing it at the JDK (the directory that contains `bin/javac`):
+    ```
+    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64  # Debian/Ubuntu
+    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk        # RHEL/Rocky
     ```
 
 4. Go (1.25 or later)
@@ -163,7 +186,7 @@ We provide a Docker-based development environment that includes Cloudberry, Hado
 
 - Start IntelliJ. Click "Open" and select the directory to which you cloned the `pxf` repo.
 - Select `File > Project Structure`.
-- Make sure you have a JDK (version 1.8) selected.
+- Make sure you have a JDK selected (1.8, 11, 17, or 21). CI builds with JDK 11 by default.
 - In the `Project Settings > Modules` section, select `Import Module`, pick the `pxf/server` directory and import as a Gradle module. You may see an error saying that there's
 no JDK set for Gradle. Just cancel and retry. It goes away the second time.
 - Import a second module, giving the `pxf/automation` directory, select "Import module from external model", pick `Maven` then click Finish.
