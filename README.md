@@ -74,17 +74,8 @@ To build PXF, you must have:
     > [!NOTE]
     > Support for JDK 1.8 will be removed in PXF 3.0. Use JDK 11 or later for new setups.
 
-    A full JDK is required -- a JRE is not enough, because the server module needs
-    `javac`. If only a JRE is installed, Gradle fails with
-    `Toolchain installation '...' does not provide the required capabilities: [JAVA_COMPILER]`.
-    Note that on Debian/Ubuntu the `maven` package depends on `default-jre-headless` and does
-    **not** pull in a JDK.
-
-    > [!IMPORTANT]
-    > If you hit that error and then install the JDK, you must also stop the Gradle
-    > daemon (`cd server && ./gradlew --stop`) before rebuilding. The daemon caches JVM
-    > installation metadata for its whole lifetime, so a daemon started while only the
-    > JRE was present keeps reporting the identical error even after `javac` exists.
+    A full JDK is required; a JRE is not enough, because the server module needs
+    `javac`.
 
     ```
     # Debian/Ubuntu
@@ -118,6 +109,8 @@ To build PXF, you must have:
 ### Build PXF
 
 PXF uses Makefiles to build its components. PXF server component uses Gradle that is wrapped into the Makefile for convenience.
+
+If the build fails, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#build-issues).
 
 > [!NOTE]
 > To comply with Apache Software Foundation release guidelines, `gradle-wrapper.jar` is not included in the source distribution. It will be downloaded automatically during the initial build. Please ensure you have an active and stable internet connection.

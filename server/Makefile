@@ -45,9 +45,8 @@ check-jdk:
 		echo "         Debian/Ubuntu: sudo apt-get install -y openjdk-11-jdk"; \
 		echo "         RHEL/Rocky:    sudo dnf install -y java-11-openjdk-devel"; \
 		echo "         export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64"; \
-		echo "       Then run './gradlew --stop', because a Gradle daemon started"; \
-		echo "       before the JDK was installed caches the old JVM metadata and"; \
-		echo "       keeps reporting the same error."; \
+		echo "       If a build already failed here, also run './gradlew --stop'."; \
+		echo "       See TROUBLESHOOTING.md for details."; \
 		exit 2; \
 	fi
 
