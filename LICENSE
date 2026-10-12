@@ -253,6 +253,35 @@ Apache Cloudberry PXF includes codes from
 ----------------------------
    Apache License - Version 2.0
 
+      Gradle wrapper scripts from Gradle (https://gradle.org),
+      copyright 2015-2021 the original authors:
+
+      server/gradlew
+      server/gradlew.bat
+
+----------------------------
+   Apache License - Version 2.0
+
+      Configuration templates for the CI single-node cluster, based on the
+      templates shipped by Apache Hadoop, Apache HBase, Apache Hive,
+      Apache Tez and Apache Ranger (see NOTICE):
+
+      ci/singlecluster/templates/hadoop/etc/hadoop/core-site.xml
+      ci/singlecluster/templates/hadoop/etc/hadoop/hdfs-site.xml
+      ci/singlecluster/templates/hadoop/etc/hadoop/yarn-env.sh
+      ci/singlecluster/templates/hbase/conf/hbase-env.sh
+      ci/singlecluster/templates/hbase/conf/hbase-site.xml
+      ci/singlecluster/templates/hive/conf/hive-env.sh
+      ci/singlecluster/templates/tez/conf/tez-site.xml
+      ci/singlecluster/templates/ranger/install.properties
+      ci/singlecluster/templates/usersync/install.properties
+
+----------------------------
+   Apache License - Version 2.0
+
+      Gradle wrapper installer, adapted from Project Nessie
+      (https://github.com/projectnessie/nessie), see NOTICE:
+
       server/gradlew-install.sh
 
       Copyright (C) 2024 Dremio
