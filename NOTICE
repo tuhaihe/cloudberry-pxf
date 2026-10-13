@@ -26,8 +26,8 @@ Copyright 2015-2025 Dremio Corporation
 
 ---------------------------------------------------------------------------
 
-This product includes configuration templates based on those shipped by
-the following Apache Software Foundation projects.
+This product includes code and configuration templates from the following
+Apache Software Foundation projects.
 
 Apache Hadoop
 Copyright 2006 and onwards The Apache Software Foundation.
@@ -43,3 +43,6 @@ Copyright 2014-2024 The Apache Software Foundation
 
 Apache Ranger
 Copyright 2014-2019 The Apache Software Foundation
+
+Apache ZooKeeper
+Copyright 2009-2026 The Apache Software Foundation
