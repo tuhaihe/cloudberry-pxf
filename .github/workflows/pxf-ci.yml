@@ -281,6 +281,91 @@ jobs:
         path: workspace/cloudberry-source-rocky10.tar.gz
         retention-days: 7
 
+  build-cloudberry-deb-ubuntu26:
+    # Ubuntu 26.04 needs the GCC 15 / C23 / Python 3.13+ fixes that only
+    # Cloudberry main has, so this lane builds main rather than REL_2_STABLE.
+    name: Build Cloudberry DEB Package (Ubuntu 26.04)
+    runs-on: ubuntu-latest
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu26.04-latest
+      options: --user root
+    env:
+      CLOUDBERRY_REF: main
+      CLOUDBERRY_PG_MAJOR: '16'
+    steps:
+    - name: Checkout Cloudberry source
+      uses: actions/checkout@v4
+      with:
+        repository: apache/cloudberry
+        ref: ${{ env.CLOUDBERRY_REF }}
+        path: workspace/cloudberry
+        submodules: true
+
+    - name: Resolve Cloudberry commit
+      id: cloudberry
+      run: echo "sha=$(git -C workspace/cloudberry rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore DEB Ubuntu 26.04 cache
+      id: cache-deb-ubuntu26
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          workspace/cloudberry-deb
+          workspace/cloudberry-source-ubuntu26.04.tar.gz
+        key: cloudberry-deb-ubuntu26.04-${{ steps.cloudberry.outputs.sha }}
+
+    - name: Checkout PXF source (for build script)
+      if: steps.cache-deb-ubuntu26.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        path: cloudberry-pxf
+
+    - name: Build Cloudberry DEB (Ubuntu 26.04)
+      if: steps.cache-deb-ubuntu26.outputs.cache-hit != 'true'
+      run: |
+        export WORKSPACE=$PWD/workspace
+        export CLOUDBERRY_VERSION=99.0.0
+        export CLOUDBERRY_BUILD=1
+        bash cloudberry-pxf/ci/docker/pxf-cbdb-dev/ubuntu/script/build_cloudberry_deb.sh
+
+    - name: Package Cloudberry source
+      if: steps.cache-deb-ubuntu26.outputs.cache-hit != 'true'
+      run: |
+        cd workspace
+        tar czf cloudberry-source-ubuntu26.04.tar.gz cloudberry/
+
+    - name: Record Cloudberry build identity
+      run: |
+        printf '%s\n' '${{ env.CLOUDBERRY_REF }}' > workspace/cloudberry-deb/cloudberry-build.ref
+        printf '%s\n' '${{ steps.cloudberry.outputs.sha }}' > workspace/cloudberry-deb/cloudberry-build.sha
+        printf '%s\n' '${{ env.CLOUDBERRY_PG_MAJOR }}' > workspace/cloudberry-deb/cloudberry-build.pg-major
+
+    - name: Save DEB Ubuntu 26.04 cache
+      # Save exact-ref caches from the default branch only; PRs may restore them.
+      if: steps.cache-deb-ubuntu26.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          workspace/cloudberry-deb
+          workspace/cloudberry-source-ubuntu26.04.tar.gz
+        key: cloudberry-deb-ubuntu26.04-${{ steps.cloudberry.outputs.sha }}
+
+    - name: Upload DEB artifact (Ubuntu 26.04)
+      uses: actions/upload-artifact@v4
+      with:
+        name: cloudberry-deb-ubuntu26.04
+        path: |
+          workspace/cloudberry-deb/*.deb
+          workspace/cloudberry-deb/cloudberry-build.*
+        retention-days: 7
+
+    - name: Upload Cloudberry source artifact (Ubuntu 26.04)
+      uses: actions/upload-artifact@v4
+      with:
+        name: cloudberry-source-ubuntu26.04
+        path: workspace/cloudberry-source-ubuntu26.04.tar.gz
+        retention-days: 7
+
   build-docker-images:
     name: Build Docker Images (Ubuntu)
     runs-on: ubuntu-latest
@@ -364,6 +449,28 @@ jobs:
         path: /tmp/singlecluster-rocky10-image.tar
         retention-days: 1
 
+  build-docker-images-ubuntu26:
+    name: Build Docker Images (Ubuntu 26.04)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout PXF source
+      uses: actions/checkout@v4
+      with:
+        path: cloudberry-pxf
+
+    - name: Build singlecluster Ubuntu 26.04 image
+      run: |
+        cd cloudberry-pxf/ci/singlecluster
+        docker build --build-arg BASE_IMAGE=apache/incubator-cloudberry:cbdb-build-ubuntu26.04-latest -t pxf/singlecluster-ubuntu26.04:3 .
+        docker save pxf/singlecluster-ubuntu26.04:3 > /tmp/singlecluster-ubuntu26.04-image.tar
+
+    - name: Upload singlecluster Ubuntu 26.04 image
+      uses: actions/upload-artifact@v4
+      with:
+        name: singlecluster-ubuntu26.04-image
+        path: /tmp/singlecluster-ubuntu26.04-image.tar
+        retention-days: 1
+
   build-pxf-cbdb-testcontainer-image:
     name: Build Testcontainer Images (${{ matrix.distro }})
     runs-on: ubuntu-latest
@@ -381,6 +488,11 @@ jobs:
           - distro: rocky10
             base_image: apache/incubator-cloudberry:cbdb-build-rocky10-latest
             image_tag: pxf/cbdb-testcontainer-rocky10:1
+          # REL_2_STABLE does not build on Ubuntu 26.04; use Cloudberry main
+          - distro: ubuntu26.04
+            base_image: apache/incubator-cloudberry:cbdb-build-ubuntu26.04-latest
+            image_tag: pxf/cbdb-testcontainer-ubuntu26.04:1
+            cloudberry_branch: main
     steps:
       - name: Get month number
         id: get-month
@@ -403,6 +515,7 @@ jobs:
         run: |
           docker build \
             --build-arg BASE_IMAGE=${{ matrix.base_image }} \
+            --build-arg CLOUDBERRY_BRANCH=${{ matrix.cloudberry_branch || 'REL_2_STABLE' }} \
             -t ${{ matrix.image_tag }} \
             automation/src/main/resources/testcontainers/pxf-cbdb
           docker save ${{ matrix.image_tag }} > "${GITHUB_WORKSPACE}/pxf-cbdb-testcontainer-${{ matrix.distro }}.tar"
@@ -670,6 +783,199 @@ jobs:
 
         if [ "${{ steps.run_test.outcome }}" == "failure" ] || [ "$FAILED_COUNT" -gt 0 ]; then
           echo "Test group ${{ matrix.test_group }} failed (Failures: $FAILED_COUNT, Skipped: $SKIPPED_COUNT)"
+          exit 1
+        fi
+
+  # Stage 2a: Ubuntu 26.04 parallel test jobs (Cloudberry main)
+  pxf-test-ubuntu26:
+    name: Test PXF Ubuntu26.04 - ${{ matrix.test_group }}
+    needs: [build-cloudberry-deb-ubuntu26, build-docker-images-ubuntu26]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test_group:
+          - cli
+          - external-table
+          - fdw
+          - hdfs
+          - hcfs
+          - hive
+          - hbase
+          - profile
+          - proxy
+          - unused
+          - features
+          - features_fdw
+          - load
+    steps:
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/hostedtoolcache
+        sudo docker system prune -af
+        df -h
+
+    - name: Checkout PXF source
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+        path: cloudberry-pxf
+        submodules: true
+
+    - name: Download Cloudberry DEB (Ubuntu 26.04)
+      uses: actions/download-artifact@v4
+      with:
+        name: cloudberry-deb-ubuntu26.04
+        path: /tmp
+
+    - name: Download Cloudberry source (Ubuntu 26.04)
+      uses: actions/download-artifact@v4
+      with:
+        name: cloudberry-source-ubuntu26.04
+        path: /tmp
+
+    - name: Download singlecluster Ubuntu 26.04 image
+      uses: actions/download-artifact@v4
+      with:
+        name: singlecluster-ubuntu26.04-image
+        path: /tmp
+
+    - name: Load singlecluster Ubuntu 26.04 image
+      run: |
+        docker load < /tmp/singlecluster-ubuntu26.04-image.tar
+
+    - name: Prepare Cloudberry source
+      run: |
+        tar xzf /tmp/cloudberry-source-ubuntu26.04.tar.gz
+        chmod -R u+rwX,go+rX cloudberry
+
+    - name: Restore Maven cache
+      id: cache-mvn
+      uses: actions/cache/restore@v4
+      with:
+        path: .m2
+        key: mvn-container-${{ hashFiles('cloudberry-pxf/automation/pom.xml') }}
+        restore-keys: |
+          mvn-container-
+
+    - name: Prepare Maven cache dir
+      run: |
+        mkdir -p .m2
+        # docker-compose mounts .m2 into container as /home/gpadmin/.m2;
+        # chmod so gpadmin (uid inside container) can write regardless of
+        # host-side uid mismatch.
+        chmod -R a+rwX .m2 || true
+
+    - name: Start Services
+      id: start_services
+      run: |
+        cd cloudberry-pxf
+        docker compose -f ci/docker/pxf-cbdb-dev/ubuntu26.04/docker-compose.yml down -v || true
+        docker compose -f ci/docker/pxf-cbdb-dev/ubuntu26.04/docker-compose.yml up -d
+        docker exec pxf-cbdb-dev sudo chown -R gpadmin:gpadmin /home/gpadmin/workspace/cloudberry
+        docker exec pxf-cbdb-dev sudo chown -R gpadmin:gpadmin /home/gpadmin/.m2
+        docker cp /tmp/*.deb pxf-cbdb-dev:/tmp/
+        docker cp /tmp/cloudberry-build.ref pxf-cbdb-dev:/tmp/
+        docker cp /tmp/cloudberry-build.sha pxf-cbdb-dev:/tmp/
+        docker cp /tmp/cloudberry-build.pg-major pxf-cbdb-dev:/tmp/
+        docker exec pxf-cbdb-dev sudo chown gpadmin:gpadmin /tmp/*.deb /tmp/cloudberry-build.*
+        docker exec pxf-cbdb-dev bash -lc "cd /home/gpadmin/workspace/cloudberry-pxf && ./ci/docker/pxf-cbdb-dev/common/script/entrypoint.sh"
+
+    - name: Run Test - ${{ matrix.test_group }}
+      id: run_test
+      continue-on-error: true
+      timeout-minutes: 120
+      run: |
+        docker exec pxf-cbdb-dev bash -lc "cd /home/gpadmin/workspace/cloudberry-pxf/automation && source ../ci/docker/pxf-cbdb-dev/common/script/pxf-env.sh && ../ci/docker/pxf-cbdb-dev/common/script/run_tests.sh ${{ matrix.test_group }}"
+        
+    - name: Collect artifacts and generate stats
+      if: always()
+      id: collect_artifacts
+      run: |
+        mkdir -p artifacts/logs
+        TEST_GROUP="${{ matrix.test_group }}"
+        TEST_RESULT="${{ steps.run_test.outcome }}"
+        
+        # Initialize counters
+        TOTAL=0
+        PASSED=0
+        FAILED=0
+        SKIPPED=0
+        
+        # Copy test artifacts
+        cp -r cloudberry-pxf/automation/test_artifacts/* artifacts/ 2>/dev/null || true
+        docker exec pxf-cbdb-dev bash -c "cp -r /usr/local/pxf/logs/* /tmp/pxf-logs/ 2>/dev/null || true" || true
+        docker cp pxf-cbdb-dev:/tmp/pxf-logs artifacts/logs/ 2>/dev/null || true
+        
+        # Parse surefire reports for automation tests
+        if [[ "$TEST_GROUP" != "cli" && "$TEST_GROUP" != "server" ]]; then
+          for xml in cloudberry-pxf/automation/target/surefire-reports/TEST-*.xml; do
+            if [ -f "$xml" ]; then
+              tests=$(grep -oP 'tests="\K\d+' "$xml" 2>/dev/null | head -1 || echo "0")
+              failures=$(grep -oP 'failures="\K\d+' "$xml" 2>/dev/null | head -1 || echo "0")
+              errors=$(grep -oP 'errors="\K\d+' "$xml" 2>/dev/null | head -1 || echo "0")
+              skipped=$(grep -oP 'skipped="\K\d+' "$xml" 2>/dev/null | head -1 || echo "0")
+              
+              TOTAL=$((TOTAL + tests))
+              FAILED=$((FAILED + failures + errors))
+              SKIPPED=$((SKIPPED + skipped))
+            fi
+          done
+          PASSED=$((TOTAL - FAILED - SKIPPED))
+        fi
+        
+        # Generate stats JSON
+        cat > artifacts/test_stats.json <<EOF
+        {
+          "group": "$TEST_GROUP",
+          "result": "$TEST_RESULT",
+          "total": $TOTAL,
+          "passed": $PASSED,
+          "failed": $FAILED,
+          "skipped": $SKIPPED
+        }
+        EOF
+        
+        echo "failed_count=$FAILED" >> $GITHUB_OUTPUT
+        echo "skipped_count=$SKIPPED" >> $GITHUB_OUTPUT
+        echo "Test stats for $TEST_GROUP (Ubuntu 26.04): total=$TOTAL, passed=$PASSED, failed=$FAILED, skipped=$SKIPPED"
+
+    - name: Cleanup containers
+      if: always()
+      run: |
+        cd cloudberry-pxf
+        docker compose -f ci/docker/pxf-cbdb-dev/ubuntu26.04/docker-compose.yml down -v || true
+
+    - name: Save Maven cache
+      # Save on every branch so PRs also benefit on rerun; scoped per branch
+      # by GHA automatically. Only save if we didn't already have the exact key.
+      if: always() && steps.cache-mvn.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: .m2
+        key: mvn-container-${{ hashFiles('cloudberry-pxf/automation/pom.xml') }}
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-ubuntu26.04-${{ matrix.test_group }}
+        path: artifacts/**
+        if-no-files-found: ignore
+        retention-days: 7
+
+    - name: Check test result
+      if: always()
+      run: |
+        FAILED_COUNT="${{ steps.collect_artifacts.outputs.failed_count || 0 }}"
+        SKIPPED_COUNT="${{ steps.collect_artifacts.outputs.skipped_count || 0 }}"
+
+        if [ "${{ steps.run_test.outcome }}" == "failure" ] || [ "$FAILED_COUNT" -gt 0 ]; then
+          echo "Test group ${{ matrix.test_group }} (Ubuntu 26.04) failed (Failures: $FAILED_COUNT, Skipped: $SKIPPED_COUNT)"
           exit 1
         fi
 
@@ -1070,6 +1376,7 @@ jobs:
           - 'ubuntu'
           - 'rocky9'
           - 'rocky10'
+          - 'ubuntu26.04'
         exclude:
           - tc_group: 'pxf-extension'
             use_fdw: 'true'
@@ -1234,7 +1541,7 @@ jobs:
   # Stage 3: Summary job
   test-summary:
     name: Test Summary
-    needs: [native-extension-compatibility, pxf-test, pxf-test-rocky9, pxf-test-rocky10, pxf-testcontainer-test]
+    needs: [native-extension-compatibility, pxf-test, pxf-test-ubuntu26, pxf-test-rocky9, pxf-test-rocky10, pxf-testcontainer-test]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1252,6 +1559,7 @@ jobs:
         generate_os_summary() {
           local os_label="$1"
           local pattern="$2"
+          local exclude="${3:-}"
 
           # OS-level counters
           local OVERALL_TOTAL=0
@@ -1265,6 +1573,10 @@ jobs:
           declare -A GROUP_STATS
 
           for dir in all-artifacts/${pattern}; do
+            # shellcheck disable=SC2053 # $exclude is a glob on purpose
+            if [ -n "$exclude" ] && [[ "$(basename "$dir")" == $exclude ]]; then
+              continue
+            fi
             if [ -d "$dir" ] && [ -f "$dir/test_stats.json" ]; then
               group=$(cat "$dir/test_stats.json" | grep -oP '"group":\s*"\K[^"]+' || basename "$dir" | sed "s/${pattern%\*}//")
               result=$(cat "$dir/test_stats.json" | grep -oP '"result":\s*"\K[^"]+' || echo "unknown")
@@ -1332,8 +1644,12 @@ jobs:
           EXIT_CODE=1
         fi
 
-        # Ubuntu results (test-results-<group>, excluding test-results-rocky*-*)
-        generate_os_summary "Ubuntu 22.04" "test-results-[!r]*" || EXIT_CODE=1
+        # Ubuntu 22.04 results (test-results-<group>, excluding test-results-rocky*-*
+        # and test-results-ubuntu26.04-*)
+        generate_os_summary "Ubuntu 22.04" "test-results-[!r]*" "test-results-ubuntu26.04-*" || EXIT_CODE=1
+
+        # Ubuntu 26.04 results
+        generate_os_summary "Ubuntu 26.04" "test-results-ubuntu26.04-*" || EXIT_CODE=1
 
         # Rocky 9 results
         generate_os_summary "Rocky 9" "test-results-rocky9-*" || EXIT_CODE=1

@@ -20,7 +20,7 @@
 # --------------------------------------------------------------------
 set -euo pipefail
 
-# Cloudberry DEB Package Build Script for Ubuntu 22.04
+# Cloudberry DEB Package Build Script for Ubuntu 22.04 and 26.04
 CLOUDBERRY_VERSION="${CLOUDBERRY_VERSION:-99.0.0}"
 CLOUDBERRY_BUILD="${CLOUDBERRY_BUILD:-1}"
 INSTALL_PREFIX="${INSTALL_PREFIX:-/usr/local/cloudberry-db}"
@@ -56,6 +56,25 @@ mkdir -p "${DEB_PKG_DIR}${INSTALL_PREFIX}"
 # Copy installed files
 cp -a "${INSTALL_PREFIX}"/* "${DEB_PKG_DIR}${INSTALL_PREFIX}/"
 
+# Runtime dependencies. Ubuntu 24.04+ renamed many libraries in the 64-bit
+# time_t transition (libssl3 -> libssl3t64, ...), and 26.04 also moved to
+# libxml2-16 and libldap2. entrypoint.sh installs with
+# `dpkg -i || apt-get install -f`, which removes the package again if a
+# dependency cannot be met, so the names must match the target release.
+. /etc/os-release
+case "${VERSION_ID}" in
+  22.04)
+    DEB_DEPENDS="libc6, libssl3, libreadline8, libxml2, libxerces-c3.2, liblz4-1, libzstd1, libapr1, libcurl4, libevent-2.1-7, libkrb5-3, libldap-2.5-0, libpam0g, libuv1, libyaml-0-2"
+    ;;
+  26.04)
+    DEB_DEPENDS="libc6, libssl3t64, libreadline8t64, libxml2-16, libxerces-c3.2t64, liblz4-1, libzstd1, libapr1t64, libcurl4t64, libevent-2.1-7t64, libkrb5-3, libldap2, libpam0g, libuv1t64, libyaml-0-2"
+    ;;
+  *)
+    echo "Unsupported Ubuntu release for the Cloudberry DEB: ${VERSION_ID}" >&2
+    exit 1
+    ;;
+esac
+
 # Create control file
 cat > "${DEB_PKG_DIR}/DEBIAN/control" << EOF
 Package: apache-cloudberry-db
@@ -67,7 +86,7 @@ Maintainer: Apache Cloudberry <dev@cloudberry.apache.org>
 Description: Apache Cloudberry Database
  Apache Cloudberry is a massively parallel processing (MPP) database
  built on PostgreSQL for analytics and data warehousing.
-Depends: libc6, libssl3, libreadline8, libxml2, libxerces-c3.2, liblz4-1, libzstd1, libapr1, libcurl4, libevent-2.1-7, libkrb5-3, libldap-2.5-0, libpam0g, libuv1, libyaml-0-2
+Depends: ${DEB_DEPENDS}
 EOF
 
 # Create postinst script

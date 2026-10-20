@@ -235,6 +235,7 @@ endif
 #   make test-tc TC_GROUP=pxf-jdbc        => run only pxf-jdbc group
 #   make test-tc TC_GROUP=pxf-s3          => run S3 Select + CloudAccess tests (RustFS sidecar)
 #   make test-tc DISTRO=rocky9            => run with Rocky Linux 9 base image
+#   make test-tc DISTRO=ubuntu26.04       => run with Ubuntu 26.04 (builds Cloudberry main)
 .PHONY: test-tc
 test-tc: check-env symlink_pxf_jars pxf_regress
 	$(MVN) -B -e -Djava.awt.headless=true -Duser.timezone=UTC \

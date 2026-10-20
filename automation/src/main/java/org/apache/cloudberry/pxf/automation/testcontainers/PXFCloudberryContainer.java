@@ -60,6 +60,14 @@ public class PXFCloudberryContainer extends GenericContainer<PXFCloudberryContai
         BASE_IMAGES.put("ubuntu", "apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest");
         BASE_IMAGES.put("rocky9", "apache/incubator-cloudberry:cbdb-build-rocky9-latest");
         BASE_IMAGES.put("rocky10", "apache/incubator-cloudberry:cbdb-build-rocky10-latest");
+        BASE_IMAGES.put("ubuntu26.04", "apache/incubator-cloudberry:cbdb-build-ubuntu26.04-latest");
+    }
+
+    // Cloudberry branch to build per distro; distros not listed use the
+    // Dockerfile default. REL_2_STABLE does not build on Ubuntu 26.04.
+    private static final Map<String, String> CLOUDBERRY_BRANCHES = new HashMap<>();
+    static {
+        CLOUDBERRY_BRANCHES.put("ubuntu26.04", "main");
     }
 
     public static final int CLOUDBERRY_PORT = 7000;
@@ -142,6 +150,10 @@ public class PXFCloudberryContainer extends GenericContainer<PXFCloudberryContai
             String distro = resolveDistro();
             String imageName = "pxf/cbdb-testcontainer-" + distro + ":1";
             String baseImage = BASE_IMAGES.getOrDefault(distro, BASE_IMAGES.get("ubuntu"));
+            String cloudberryBranch = CLOUDBERRY_BRANCHES.get(distro);
+            String[] buildArgs = cloudberryBranch == null
+                    ? new String[]{"BASE_IMAGE=" + baseImage}
+                    : new String[]{"BASE_IMAGE=" + baseImage, "CLOUDBERRY_BRANCH=" + cloudberryBranch};
 
             ClasspathDockerContainerBuilder.ensureImageExists(
                     imageName,
@@ -150,7 +162,7 @@ public class PXFCloudberryContainer extends GenericContainer<PXFCloudberryContai
                             "Dockerfile",
                             "script/build_cloudberry.sh"
                     },
-                    new String[]{"BASE_IMAGE=" + baseImage});
+                    buildArgs);
 
             instance = new PXFCloudberryContainer(imageName, repo);
             instance.start();
