@@ -32,7 +32,7 @@ public class CurlUtils {
 
         if (headers != null && !headers.isEmpty()) {
             for (Map.Entry<String, String> entry : headers.entrySet()) {
-                str.append("--header \"" + entry.getKey() + "=" + entry.getValue() + "\" ");
+                str.append("--header \"" + entry.getKey() + ": " + entry.getValue() + "\" ");
             }
         }
 
